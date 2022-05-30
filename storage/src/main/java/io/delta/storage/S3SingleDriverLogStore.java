@@ -28,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.io.CountingOutputStream;
@@ -36,6 +37,14 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.RemoteIterator;
+import org.apache.hadoop.fs.s3a.Listing;
+import org.apache.hadoop.fs.s3a.S3AFileStatus;
+import org.apache.hadoop.fs.s3a.S3AFileSystem;
+import org.apache.hadoop.fs.s3a.S3ListRequest;
+
+import static org.apache.hadoop.fs.s3a.S3AUtils.ACCEPT_ALL;
+import static org.apache.hadoop.fs.s3a.S3AUtils.iteratorToStatuses;
 
 /**
  * Single Spark-driver/JVM LogStore implementation for S3.
@@ -223,8 +232,30 @@ public class S3SingleDriverLogStore extends HadoopFileSystemLogStore {
             );
         }
 
+        S3AFileSystem s3fs = (S3AFileSystem) fs;
+
+        String bucketPrefix = "s3a://" + s3fs.getBucket() + "/";
+        if(!parentPath.toString().startsWith(bucketPrefix)) throw new IllegalArgumentException("Invalid path: " + parentPath);
+        String prefix = parentPath.toString().substring(bucketPrefix.length());
+        if(!resolvedPath.toString().startsWith(bucketPrefix)) throw new IllegalArgumentException("Invalid path: " + resolvedPath);
+        String startAfter = resolvedPath.toString().substring(bucketPrefix.length());
+
+        Listing listing = s3fs.getListing();
+        // List files lexicographically after resolvedPath inclusive within the same directory
+        RemoteIterator<S3AFileStatus> l = listing.createFileStatusListingIterator(resolvedPath,
+                S3ListRequest.v2(
+                        new ListObjectsV2Request()
+                                .withBucketName(s3fs.getBucket())
+                                .withMaxKeys(1000)
+                                .withPrefix(prefix)
+                                .withStartAfter(startAfter)
+                ), ACCEPT_ALL,
+                new Listing.AcceptAllButSelfAndS3nDirs(resolvedPath)
+        );
+
         final List<FileStatus> listedFromFs = Arrays
-            .stream(fs.listStatus(parentPath))
+            .stream(iteratorToStatuses(l, new HashSet<>()))
+//                .stream(fs.listStatus(parentPath))
             .filter(s -> s.getPath().getName().compareTo(resolvedPath.getName()) >= 0)
             .collect(Collectors.toList());
 
