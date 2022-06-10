@@ -65,6 +65,15 @@ lazy val core = (project in file("core"))
       "org.apache.spark" %% "spark-sql" % sparkVersion % "test" classifier "tests",
       "org.apache.spark" %% "spark-hive" % sparkVersion % "test" classifier "tests",
 
+
+      "org.apache.hadoop" % "hadoop-common" % "3.3.1",
+//      "org.apache.hadoop" %% "hadoop-aws" % "3.3.1" % "provided",
+
+      "org.apache.hadoop" % "hadoop-aws" % "3.3.1",
+
+//"org.apache.hadoop" %% "hadoop-common" % "3.3.1" % "test" classifier "tests",
+ //     "org.apache.hadoop" %% "hadoop-aws" % "3.3.1" % "test" classifier "tests",
+
       // Compiler plugins
       // -- Bump up the genjavadoc version explicitly to 0.18 to work with Scala 2.12
       compilerPlugin("com.typesafe.genjavadoc" %% "genjavadoc-plugin" % "0.18" cross CrossVersion.full)

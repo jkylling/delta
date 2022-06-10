@@ -56,6 +56,51 @@ class DeltaSuite extends QueryTest
     }
   }
 
+  val bucket = "s3a://your-s3-bucket"
+
+  test("create table") {
+    spark
+      .sparkContext
+      .hadoopConfiguration
+      .set(
+        "fs.s3a.aws.credentials.provider",
+        "com.amazonaws.auth.profile.ProfileCredentialsProvider"
+      )
+
+    spark.sql(s"CREATE TABLE delta_log_performace_test1 (value LONG) USING DELTA LOCATION '${bucket}_0'").collect()
+    spark.sql(s"CREATE TABLE delta_log_performace_test1 (value LONG) USING DELTA LOCATION '${bucket}_1'").collect()
+    spark.sql(s"CREATE TABLE delta_log_performace_test2 (value LONG) USING DELTA LOCATION '${bucket}_2'").collect()
+  }
+
+  test("fill bucket 2 _delta_log with garbage") {
+    println(
+      s"""
+        |# In a shell run:
+        |for i in {1..100000}; do touch .$$i.txt; done
+        |aws s3 cp . ${bucket.replace("s3a://", "s3://")}_2/_delta_log/ --recursive
+        |""".stripMargin)
+  }
+
+  test("listing test") {
+      spark
+        .sparkContext
+        .hadoopConfiguration
+        .set(
+          "fs.s3a.aws.credentials.provider",
+          "com.amazonaws.auth.profile.ProfileCredentialsProvider"
+        )
+
+    spark.sql(s"select * from delta.`${bucket}_0`") // warmup
+
+    val start0 = System.currentTimeMillis()
+    spark.sql(s"select * from delta.`${bucket}_1`")
+    println(s"d1 = ${System.currentTimeMillis() - start0}")
+
+    val start1 = System.currentTimeMillis()
+    spark.sql(s"select * from delta.`${bucket}_2`")
+    println(s"d2 = ${System.currentTimeMillis() - start1}")
+    }
+
   test("handle partition filters and data filters") {
     withTempDir { inputDir =>
       val testPath = inputDir.getCanonicalPath
